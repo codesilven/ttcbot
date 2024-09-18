@@ -5,9 +5,29 @@ import asyncio
 import requests
 from bs4 import BeautifulSoup
 import os
+import sys
 from PIL import Image
 
 
+
+
+admins = [167399259795095552,103987106732347392]
+
+
+def is_compiled():
+    return not "python.exe" in sys.executable
+def clean_path(path):
+    normalized_path = os.path.normpath(path)
+    cleaned_path = normalized_path.strip(os.path.sep)
+    return cleaned_path
+def top_path():
+    if (is_compiled()):
+        return os.sep.join(sys.executable.split("\\")[:-1])
+    else:
+        return os.path.dirname(__file__).rstrip(os.sep +"cogs")
+
+def rel_path(p = ""):
+    return top_path() + os.sep + p
 
 class Timer:
     def __init__(self):
@@ -115,9 +135,9 @@ def scrape(ttc_number):
                         mode[card] = 1
         # fetch images from tengutools
         for card_id in all_ids:
-            if(not os.path.isfile("db"+os.sep+card_id+".jpg")):
-                img = requests.get(f"https://tengutools.com/wp-content/uploads/pictures/cards/{card_id}.jpg")
-                with open("db"+os.sep+card_id+".jpg","wb") as f:
+            if(not os.path.isfile(rel_path("db"+os.sep+card_id+".jpg"))):
+                img = requests.get(f"https://tengutools.com/wp-content/uploads/pictures/cards/{card_id.lstrip("0")}.jpg")
+                with open(rel_path("db"+os.sep+card_id+".jpg"),"wb") as f:
                     f.write(img.content)
                     print(f"downloaded {card_id}")
 
@@ -143,7 +163,7 @@ def scrape(ttc_number):
                 card_id = get_card(main, card_count)
                 card_count += 1
                 if(card_id):
-                    card_img = Image.open("db"+os.sep+card_id+".jpg")
+                    card_img = Image.open(rel_path("db"+os.sep+card_id+".jpg"))
                     img.paste(card_img,(w_offset,h_offset))
                 #print(i+1*j+1)
         #extra
@@ -151,7 +171,7 @@ def scrape(ttc_number):
         for i in range(0,15):
             card_id = get_card(extra,i+1)
             if(card_id):
-                card_img = Image.open("db"+os.sep+card_id+".jpg")
+                card_img = Image.open(rel_path("db"+os.sep+card_id+".jpg"))
                 card_img = card_img.resize((int(c_width*small_factor),int(c_height*small_factor)))
                 img.paste(card_img,(int(padding/2)+(int((c_width+padding)*small_factor)*i),top_offset))
 
@@ -159,21 +179,18 @@ def scrape(ttc_number):
         for i in range(0,15):
             card_id = get_card(side,i+1)
             if(card_id):
-                card_img = Image.open("db"+os.sep+card_id+".jpg")
+                card_img = Image.open(rel_path("db"+os.sep+card_id+".jpg"))
                 card_img = card_img.resize((int(c_width*small_factor),int(c_height*small_factor)))
                 img.paste(card_img,(int(padding/2)+(int((c_width+padding)*small_factor)*i),top_offset))
-        img.save('deck_image.jpg')
+        img.save(rel_path('deck_image.jpg'))
         #clean up
         for card_id in all_ids:
-            if(os.path.isfile("db"+os.sep+card_id+".jpg")):
-                os.remove("db"+os.sep+card_id+".jpg")
+            if(os.path.isfile(rel_path("db"+os.sep+card_id+".jpg"))):
+                os.remove(rel_path("db"+os.sep+card_id+".jpg"))
  
         return name,url,deck_name
     return False
 
-
-RetroBotId = 167399259795095552
-ChannelId = ""
 
 
 class TTC(commands.Cog):
@@ -182,7 +199,10 @@ class TTC(commands.Cog):
         self.timer = Timer()
         self.timer_iteration = 0
         self.ctx = None
-        #channel number
+        with open(rel_path('bot_id.txt')) as t:
+            self.bot_id = t.read()
+        with open(rel_path('channel_id.txt')) as t:
+            self.channel_id = t.read()
 
     async def query_with_timer(self,ttc_number):
         # query
@@ -202,26 +222,53 @@ class TTC(commands.Cog):
                 msg = f"{name}"
             msg += f" won TTC{ttc_number} with [{deck_name}](<{url}>)!"
 
-            with open("deck_image.jpg","rb") as f:
+            with open(rel_path("deck_image.jpg"),"rb") as f:
                 pic = discord.File(f)
-                await self.ctx.send(msg,file=pic)
+                channel = None
+                try:
+                    channel = self.bot.get_channel(int(self.channel_id))
+                except:
+                    await self.ctx.send("Channel not set! Sending here instead.")
+                    await self.ctx.send(msg,file=pic)
+                if(channel):
+                    await channel.send(msg,file=pic)
             #send message
             #clean up files
 
     @commands.command(pass_context=True)
-    async def test(self, ctx):
-        await ctx.send("[lol](<https://google.com>)")
+    async def set_channel(self, ctx):
+        if(not ctx.message.author.id in admins):
+            return
+        with open(rel_path("channel_id.txt"), "w") as f:
+            f.write(str(ctx.channel.id))
+            self.channel_id = ctx.channel.id
+        await ctx.send("Saved channel id!")
+
+    @commands.command(pass_context=True)
+    async def set_bot(self, ctx):
+        if(not ctx.message.author.id in admins):
+            return
+        text = ctx.message.content
+        if("<@" in text):
+            user = (text[text.find("<@"):text.find(">")+1])
+            print(user)
+            if(user and len(user) > 3):
+                user = user[2:-1]
+                with open(rel_path("bot_id.txt"), "w") as f:
+                    f.write(str(user)) 
+                    self.bot_id = user
+                await ctx.send(f"Saved <@{user}> as target bot!")
 
     
     @commands.Cog.listener()
     async def on_message(self,message):
-        if(message.author.id != RetroBotId):
+        if(message.author.id != int(self.bot_id)):
             return
 
         self.ctx = await self.bot.get_context(message)
         text = message.content
         print(text)
-        if(text.startswith("Congrats! The results of") and text.endswith("have been finalized.")):
+        if(text.startswith("Congrats! The results of Toronto Time Capsule") and text.endswith("have been finalized.")):
             # extract number
             res = None
             for chunk in text.split(" "):

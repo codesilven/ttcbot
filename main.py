@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
 
+import os
 import sys
 import discord
 from discord.ext import commands
 import asyncio
 import logging
+from cogs.ttc_cog import rel_path
 
 logging.basicConfig(level=logging.INFO)
 
 token = ""
 try:
-    with open('token.txt') as t:
+    with open(rel_path('token.txt')) as t:
         token = t.read()
 except Exception as e:
     print(e)
@@ -30,6 +32,15 @@ async def main():
     await bot.start(f'{token}')
 
 if __name__ == '__main__':
+    if(not os.path.exists(rel_path("db"))):
+        os.mkdir("db")
+    if(not os.path.isfile(rel_path("channel_id.txt"))):
+        with open(rel_path("channel_id.txt"),"w") as f:
+            f.write("CHANNEL ID HERE")
+    if(not os.path.isfile(rel_path("bot_id.txt"))):
+        with open(rel_path("bot_id.txt"),"w") as f:
+            f.write("BOT ID HERE")
+
     asyncio.run(main())
 
 # if db doesn't exist create it
